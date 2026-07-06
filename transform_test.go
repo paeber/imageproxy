@@ -390,6 +390,36 @@ func TestTransformImage(t *testing.T) {
 	}
 }
 
+func TestTransformPalette(t *testing.T) {
+	src := newImage(2, 2, red, green, blue, yellow)
+	buf := new(bytes.Buffer)
+	if err := png.Encode(buf, src); err != nil {
+		t.Fatalf("error encoding reference image: %v", err)
+	}
+
+	out, err := Transform(buf.Bytes(), Options{Palette: "E1002", Format: "png"})
+	if err != nil {
+		t.Fatalf("Transform with palette returned error: %v", err)
+	}
+
+	d, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("error decoding transformed image: %v", err)
+	}
+
+	palette, err := LookupPalette("E1002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for y := d.Bounds().Min.Y; y < d.Bounds().Max.Y; y++ {
+		for x := d.Bounds().Min.X; x < d.Bounds().Max.X; x++ {
+			if !paletteContains(d.At(x, y), palette.Colors) {
+				t.Errorf("pixel (%d,%d) not in palette", x, y)
+			}
+		}
+	}
+}
+
 func TestTrimEdges(t *testing.T) {
 	x := color.NRGBA{255, 255, 255, 255}
 	o := color.NRGBA{0, 0, 0, 255}

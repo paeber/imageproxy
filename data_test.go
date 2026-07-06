@@ -37,6 +37,26 @@ func TestOptions_String(t *testing.T) {
 			Options{ScaleUp: true, CropX: 100, CropY: 200, CropWidth: 300, CropHeight: 400, SmartCrop: true},
 			"0x0,ch400,cw300,cx100,cy200,sc,scaleUp",
 		},
+		{
+			Options{Grayscale: true},
+			"0x0,gray",
+		},
+		{
+			Options{Binary: true},
+			"0x0,bw",
+		},
+		{
+			Options{Binary: true, BinaryThreshold: 192},
+			"0x0,bw192",
+		},
+		{
+			Options{Palette: "E1002"},
+			"0x0,palE1002",
+		},
+		{
+			Options{Palette: "E1002", Dither: true},
+			"0x0,dither,palE1002",
+		},
 	}
 
 	for i, tt := range tests {
@@ -88,6 +108,15 @@ func TestParseOptions(t *testing.T) {
 		{"q70,1x2,fit,r90,fv,fh,sc0ffee,png", Options{Width: 1, Height: 2, Fit: true, Rotate: 90, FlipVertical: true, FlipHorizontal: true, Quality: 70, Signature: "c0ffee", Format: "png"}},
 		{"r90,fh,sc0ffee,png,q90,1x2,fv,fit", Options{Width: 1, Height: 2, Fit: true, Rotate: 90, FlipVertical: true, FlipHorizontal: true, Quality: 90, Signature: "c0ffee", Format: "png"}},
 		{"cx100,cw300,1x2,cy200,ch400,sc,scaleUp,vu1234567890", Options{Width: 1, Height: 2, ScaleUp: true, CropX: 100, CropY: 200, CropWidth: 300, CropHeight: 400, SmartCrop: true, ValidUntil: time.Unix(1234567890, 0)}},
+
+		// color processing
+		{"gray", Options{Grayscale: true}},
+		{"bw", Options{Binary: true}},
+		{"bw128", Options{Binary: true, BinaryThreshold: 128}},
+		{"palE1002", Options{Palette: "E1002"}},
+		{"palE1002,dither", Options{Palette: "E1002", Dither: true}},
+		{"0x0,palE1002", Options{Palette: "E1002"}},
+		{"bw,palE1002", Options{Palette: "E1002"}},
 	}
 
 	for _, tt := range tests {

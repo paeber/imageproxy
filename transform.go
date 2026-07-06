@@ -322,7 +322,7 @@ func transformImage(m image.Image, opt Options) image.Image {
 		m = imaging.FlipH(m)
 	}
 
-	return m
+	return applyColorProcessing(m, opt)
 }
 
 // trimEdges returns a new image with solid color borders of the image removed.

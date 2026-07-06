@@ -8,6 +8,7 @@
 imageproxy is a caching image proxy server written in go. It features:
 
 - basic image adjustments like resizing, cropping, and rotation
+- color processing: grayscale, binary bitmap, and palette mapping for ePaper displays
 - access control using allowed hosts list or request signing (HMAC-SHA256)
 - support for jpeg, png, webp (decode only), tiff, and gif image formats
   (including animated gifs)
@@ -83,6 +84,35 @@ source image][small-things], which measures 1024 by 678 pixels.
 | 200x,q60               | 200px wide, proportional height, 60% quality               | <a href="https://willnorris.com/api/imageproxy/200x,q60/https://willnorris.com/images/imageproxy/small-things.jpg"><img src="https://willnorris.com/api/imageproxy/200x,q60/https://willnorris.com/images/imageproxy/small-things.jpg" alt="200x,q60"></a>                                           |
 | 200x,png               | 200px wide, converted to PNG format                        | <a href="https://willnorris.com/api/imageproxy/200x,png/https://willnorris.com/images/imageproxy/small-things.jpg"><img src="https://willnorris.com/api/imageproxy/200x,png/https://willnorris.com/images/imageproxy/small-things.jpg" alt="200x,png"></a>                                           |
 | cx175,cw400,ch300,100x | crop to 400x300px starting at (175,0), scale to 100px wide | <a href="https://willnorris.com/api/imageproxy/cx175,cw400,ch300,100x/https://willnorris.com/images/imageproxy/small-things.jpg"><img src="https://willnorris.com/api/imageproxy/cx175,cw400,ch300,100x/https://willnorris.com/images/imageproxy/small-things.jpg" alt="cx175,cw400,ch300,100x"></a> |
+
+### Color Processing
+
+Color processing options are applied after geometric transforms (resize, crop,
+rotate, flip). This is useful for preparing images for limited-color displays
+such as ePaper panels.
+
+| Options | Meaning |
+| ------- | ------- |
+| `gray` | Convert to grayscale |
+| `bw` | Convert to 1-bit black and white (threshold 128) |
+| `bw{N}` | Convert to 1-bit black and white with threshold N (0-255) |
+| `pal{ID}` | Map each pixel to the nearest color in a predefined palette |
+| `dither` | Enable Floyd-Steinberg dithering during palette mapping (use with `pal{ID}`) |
+
+Predefined palette IDs:
+
+| ID | Colors | Use case |
+| -- | ------ | -------- |
+| `E1002` | white, black, green, red, yellow, blue | reTerminal E1002 six-color ePaper (800×480) |
+| `BW` | black, white | Generic two-color palette |
+
+Example URLs for the reTerminal E1002 display:
+
+```
+http://localhost/800x480,palE1002,png/https://example.com/photo.jpg
+http://localhost/800x480,palE1002,dither,png/https://example.com/photo.jpg
+http://localhost/0x0,palE1002,png/https://example.com/photo.jpg
+```
 
 The [smart crop feature](https://pkg.go.dev/willnorris.com/go/imageproxy#hdr-Smart_Crop-ParseOptions)
 can best be seen by comparing crops of [this source image][judah-sheets], with

@@ -35,6 +35,11 @@ const (
 	optSmartCrop       = "sc"
 	optTrim            = "trim"
 	optValidUntil      = "vu"
+	optGray            = "gray"
+	optBinary          = "bw"
+	optBinaryPrefix    = "bw"
+	optPalettePrefix   = "pal"
+	optDither          = "dither"
 )
 
 // URLError reports a malformed URL error.
@@ -91,6 +96,21 @@ type Options struct {
 
 	// If non-zero, the URL is valid until this time.
 	ValidUntil time.Time
+
+	// Convert image to grayscale.
+	Grayscale bool
+
+	// Convert image to a 1-bit black and white bitmap.
+	Binary bool
+
+	// Threshold for binary conversion (0-255). Zero uses default 128.
+	BinaryThreshold int
+
+	// Map colors to a predefined palette by ID (e.g. "E1002").
+	Palette string
+
+	// Apply Floyd-Steinberg dithering during palette mapping.
+	Dither bool
 }
 
 func (o Options) String() string {
@@ -140,6 +160,22 @@ func (o Options) String() string {
 	if !o.ValidUntil.IsZero() {
 		opts = append(opts, fmt.Sprintf("%s%d", optValidUntil, o.ValidUntil.Unix()))
 	}
+	if o.Grayscale {
+		opts = append(opts, optGray)
+	}
+	if o.Binary {
+		if o.BinaryThreshold != 0 {
+			opts = append(opts, fmt.Sprintf("%s%d", optBinaryPrefix, o.BinaryThreshold))
+		} else {
+			opts = append(opts, optBinary)
+		}
+	}
+	if o.Palette != "" {
+		opts = append(opts, optPalettePrefix+o.Palette)
+	}
+	if o.Dither {
+		opts = append(opts, optDither)
+	}
 
 	sort.Strings(opts)
 
@@ -151,7 +187,7 @@ func (o Options) String() string {
 // the presence of other fields (like Fit).  A non-empty Format value is
 // assumed to involve a transformation.
 func (o Options) transform() bool {
-	return o.Width != 0 || o.Height != 0 || o.Rotate != 0 || o.FlipHorizontal || o.FlipVertical || o.Quality != 0 || o.Format != "" || o.CropX != 0 || o.CropY != 0 || o.CropWidth != 0 || o.CropHeight != 0 || o.Trim
+	return o.Width != 0 || o.Height != 0 || o.Rotate != 0 || o.FlipHorizontal || o.FlipVertical || o.Quality != 0 || o.Format != "" || o.CropX != 0 || o.CropY != 0 || o.CropWidth != 0 || o.CropHeight != 0 || o.Trim || o.Grayscale || o.Binary || o.Palette != ""
 }
 
 // ParseOptions parses str as a list of comma separated transformation options.
@@ -264,6 +300,28 @@ func (o Options) transform() bool {
 //	200x,png    - 200 pixels wide, converted to PNG format
 //	cw100,ch100 - crop image to 100px square, starting at (0,0)
 //	cx10,cy20,cw100,ch200 - crop image starting at (10,20) is 100px wide and 200px tall
+//
+// # Color Processing
+//
+// The "gray" option converts the image to grayscale.
+//
+// The "bw" option converts the image to a 1-bit black and white bitmap using
+// a default threshold of 128. An explicit threshold can be set with "bw{N}"
+// where N is 0-255 (e.g. "bw192").
+//
+// The "pal{ID}" option maps each pixel to the nearest color in a predefined
+// palette. Supported palette IDs include "E1002" (reTerminal E1002 six-color
+// ePaper: white, black, green, red, yellow, blue) and "BW" (black and white).
+// Palette mapping takes precedence over "bw" when both are specified.
+//
+// The "dither" option enables Floyd-Steinberg error diffusion during palette
+// mapping. It is ignored unless a palette option is also specified.
+//
+//	800x480,palE1002       - resize and map to E1002 palette
+//	800x480,palE1002,dither - same with dithering
+//	0x0,palE1002           - palette mapping only, no resize
+//	800x480,gray           - grayscale
+//	800x480,bw             - 1-bit black and white
 func ParseOptions(str string) Options {
 	var options Options
 
@@ -284,6 +342,22 @@ func ParseOptions(str string) Options {
 			options.SmartCrop = true
 		case opt == optTrim:
 			options.Trim = true
+		case opt == optGray:
+			options.Grayscale = true
+		case opt == optBinary:
+			options.Binary = true
+			options.BinaryThreshold = 0
+		case opt == optDither:
+			options.Dither = true
+		case strings.HasPrefix(opt, optBinaryPrefix) && opt != optBinary:
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optBinaryPrefix)); err == nil && v >= 0 && v <= 255 {
+				options.Binary = true
+				options.BinaryThreshold = v
+			}
+		case strings.HasPrefix(opt, optPalettePrefix):
+			options.Palette = strings.TrimPrefix(opt, optPalettePrefix)
+			options.Binary = false
+			options.BinaryThreshold = 0
 		case strings.HasPrefix(opt, optRotatePrefix):
 			value := strings.TrimPrefix(opt, optRotatePrefix)
 			options.Rotate, _ = strconv.Atoi(value)
