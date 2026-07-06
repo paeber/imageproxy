@@ -117,6 +117,8 @@ func TestParseOptions(t *testing.T) {
 		{"palE1002,dither", Options{Palette: "E1002", Dither: true}},
 		{"0x0,palE1002", Options{Palette: "E1002"}},
 		{"bw,palE1002", Options{Palette: "E1002"}},
+		{"palE1002,vivid,dither,sat10", Options{Palette: "E1002", PaletteVivid: true, Dither: true, PaletteSatMin: 10}},
+		{"palE1002,pmrgb", Options{Palette: "E1002", PaletteMode: "rgb"}},
 	}
 
 	for _, tt := range tests {

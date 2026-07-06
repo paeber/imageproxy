@@ -40,6 +40,11 @@ const (
 	optBinaryPrefix    = "bw"
 	optPalettePrefix   = "pal"
 	optDither          = "dither"
+	optPaletteModeHue  = "pmhue"
+	optPaletteModeLab  = "pmlab"
+	optPaletteModeRGB  = "pmrgb"
+	optPaletteSatPrefix = "sat"
+	optPaletteVivid    = "vivid"
 )
 
 // URLError reports a malformed URL error.
@@ -111,6 +116,15 @@ type Options struct {
 
 	// Apply Floyd-Steinberg dithering during palette mapping.
 	Dither bool
+
+	// Palette mapping mode: "hue" (default), "lab", or "rgb".
+	PaletteMode string
+
+	// Minimum saturation (1-100) before a pixel is treated as chromatic. Zero uses default 15.
+	PaletteSatMin int
+
+	// Boost saturation before palette mapping (useful for album art and graphics).
+	PaletteVivid bool
 }
 
 func (o Options) String() string {
@@ -175,6 +189,17 @@ func (o Options) String() string {
 	}
 	if o.Dither {
 		opts = append(opts, optDither)
+	}
+	if o.PaletteMode == "lab" {
+		opts = append(opts, optPaletteModeLab)
+	} else if o.PaletteMode == "rgb" {
+		opts = append(opts, optPaletteModeRGB)
+	}
+	if o.PaletteSatMin != 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optPaletteSatPrefix, o.PaletteSatMin))
+	}
+	if o.PaletteVivid {
+		opts = append(opts, optPaletteVivid)
 	}
 
 	sort.Strings(opts)
@@ -322,6 +347,17 @@ func (o Options) transform() bool {
 //	0x0,palE1002           - palette mapping only, no resize
 //	800x480,gray           - grayscale
 //	800x480,bw             - 1-bit black and white
+//
+// Palette mapping uses hue-priority matching by default so light blues map to
+// blue and pinks to red instead of white. Optional tuning:
+//
+//	pmhue       - hue-priority matching (default)
+//	pmlab       - perceptual Lab color distance
+//	pmrgb       - legacy weighted RGB distance
+//	sat{N}      - chroma threshold 1-100 (default 15); lower keeps more pastels chromatic
+//	vivid       - boost saturation before mapping (recommended for album art)
+//
+//	800x480,palE1002,vivid,dither - vivid album cover with dithering
 func ParseOptions(str string) Options {
 	var options Options
 
@@ -349,6 +385,18 @@ func ParseOptions(str string) Options {
 			options.BinaryThreshold = 0
 		case opt == optDither:
 			options.Dither = true
+		case opt == optPaletteModeHue:
+			options.PaletteMode = "hue"
+		case opt == optPaletteModeLab:
+			options.PaletteMode = "lab"
+		case opt == optPaletteModeRGB:
+			options.PaletteMode = "rgb"
+		case opt == optPaletteVivid:
+			options.PaletteVivid = true
+		case strings.HasPrefix(opt, optPaletteSatPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optPaletteSatPrefix)); err == nil && v > 0 && v <= 100 {
+				options.PaletteSatMin = v
+			}
 		case strings.HasPrefix(opt, optBinaryPrefix) && opt != optBinary:
 			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optBinaryPrefix)); err == nil && v >= 0 && v <= 255 {
 				options.Binary = true

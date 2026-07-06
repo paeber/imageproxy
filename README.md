@@ -98,6 +98,11 @@ such as ePaper panels.
 | `bw{N}` | Convert to 1-bit black and white with threshold N (0-255) |
 | `pal{ID}` | Map each pixel to the nearest color in a predefined palette |
 | `dither` | Enable Floyd-Steinberg dithering during palette mapping (use with `pal{ID}`) |
+| `pmhue` | Hue-priority palette matching (default) — pastels map to chromatic colors |
+| `pmlab` | Perceptual Lab color distance matching |
+| `pmrgb` | Legacy weighted RGB distance matching |
+| `sat{N}` | Chroma threshold 1–100 (default 15); lower keeps more light colors chromatic |
+| `vivid` | Boost saturation before mapping (recommended for album art and graphics) |
 
 Predefined palette IDs:
 
@@ -111,8 +116,13 @@ Example URLs for the reTerminal E1002 display:
 ```
 http://localhost/800x480,palE1002,png/https://example.com/photo.jpg
 http://localhost/800x480,palE1002,dither,png/https://example.com/photo.jpg
+http://localhost/800x480,palE1002,vivid,dither,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,vivid,dither,sat10,png/https://example.com/cover.jpg
 http://localhost/0x0,palE1002,png/https://example.com/photo.jpg
 ```
+
+For music covers and artwork, use `vivid` with `dither`. If light blues or pinks
+still wash out, lower the chroma threshold with `sat10` or `sat5`.
 
 The [smart crop feature](https://pkg.go.dev/willnorris.com/go/imageproxy#hdr-Smart_Crop-ParseOptions)
 can best be seen by comparing crops of [this source image][judah-sheets], with

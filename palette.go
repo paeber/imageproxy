@@ -45,31 +45,6 @@ func LookupPalette(id string) (Palette, error) {
 	return p, nil
 }
 
-// nearestColor returns the palette color closest to c using weighted RGB distance.
-func nearestColor(c color.Color, palette []color.Color) color.Color {
-	cr, cg, cb, _ := c.RGBA()
-	// RGBA returns 16-bit values; scale to 8-bit for distance calculation.
-	r8 := int(cr >> 8)
-	g8 := int(cg >> 8)
-	b8 := int(cb >> 8)
-
-	best := palette[0]
-	bestDist := -1
-	for _, p := range palette {
-		pr, pg, pb, _ := p.RGBA()
-		dr := r8 - int(pr>>8)
-		dg := g8 - int(pg>>8)
-		db := b8 - int(pb>>8)
-		// Weight green channel slightly higher for perceptual match on ePaper.
-		dist := dr*dr*2 + dg*dg*4 + db*db*3
-		if bestDist < 0 || dist < bestDist {
-			bestDist = dist
-			best = p
-		}
-	}
-	return best
-}
-
 func colorToRGBA8(c color.Color) (r, g, b, a uint8) {
 	cr, cg, cb, ca := c.RGBA()
 	return uint8(cr >> 8), uint8(cg >> 8), uint8(cb >> 8), uint8(ca >> 8)
@@ -86,20 +61,21 @@ func clampByte(v float64) uint8 {
 }
 
 // MapPalette maps each pixel in img to the nearest palette color.
-// When dither is true, Floyd-Steinberg error diffusion is applied.
-func MapPalette(img image.Image, palette Palette, dither bool) image.Image {
+// When cfg.Dither is true, Floyd-Steinberg error diffusion is applied.
+func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Image {
+	matcher := newPaletteMatcher(palette.Colors, cfg)
 	bounds := img.Bounds()
 	out := image.NewNRGBA(bounds)
-	if !dither {
+	if !cfg.Dither {
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				out.Set(x, y, nearestColor(img.At(x, y), palette.Colors))
+				r, g, b, _ := colorToRGBA8(img.At(x, y))
+				out.Set(x, y, matcher.match(r, g, b))
 			}
 		}
 		return out
 	}
 
-	// Working buffer with float error accumulation per channel.
 	w := bounds.Dx()
 	h := bounds.Dy()
 	buf := make([][3]float64, w*h)
@@ -111,12 +87,7 @@ func MapPalette(img image.Image, palette Palette, dither bool) image.Image {
 			oldR := float64(r) + buf[i][0]
 			oldG := float64(g) + buf[i][1]
 			oldB := float64(b) + buf[i][2]
-			nearest := nearestColor(color.NRGBA{
-				R: clampByte(oldR),
-				G: clampByte(oldG),
-				B: clampByte(oldB),
-				A: 255,
-			}, palette.Colors)
+			nearest := matcher.match(clampByte(oldR), clampByte(oldG), clampByte(oldB))
 			nr, ng, nb, _ := colorToRGBA8(nearest)
 			out.Set(bounds.Min.X+x, bounds.Min.Y+y, nearest)
 

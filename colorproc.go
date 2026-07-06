@@ -20,7 +20,7 @@ func applyColorProcessing(m image.Image, opt Options) image.Image {
 			log.Printf("palette error: %v", err)
 			return m
 		}
-		return MapPalette(m, palette, opt.Dither)
+		return MapPalette(m, palette, paletteMapConfigFromOptions(opt))
 	}
 	if opt.Binary {
 		gray := imaging.Grayscale(m)
