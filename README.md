@@ -441,12 +441,13 @@ in the [README](https://github.com/oreillymedia/prototype-imageproxy/blob/master
 
 ### Docker
 
-A docker image is available at [`ghcr.io/willnorris/imageproxy`](https://github.com/willnorris/imageproxy/pkgs/container/imageproxy).
-
-You can run it by
+A docker image is published to GitHub Container Registry on every push to `main`
+and on version tags (`v*`). Images are tagged as `latest`, `main`, and `sha-<commit>`
+for main branch builds.
 
 ```sh
-docker run -p 8080:8080 ghcr.io/willnorris/imageproxy -addr 0.0.0.0:8080
+docker pull ghcr.io/<your-username>/imageproxy:latest
+docker run -p 8080:8080 ghcr.io/<your-username>/imageproxy:latest
 ```
 
 Or in your Dockerfile:

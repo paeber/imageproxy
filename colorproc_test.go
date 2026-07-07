@@ -60,13 +60,17 @@ func TestApplyColorProcessingPalettePrecedence(t *testing.T) {
 }
 
 func TestOptionsTransformColor(t *testing.T) {
-	if !Options{Palette: "E1002"}.transform() {
-		t.Error("palette-only options should trigger transform")
+	tests := []struct {
+		name string
+		opt  Options
+	}{
+		{"palette", Options{Palette: "E1002"}},
+		{"grayscale", Options{Grayscale: true}},
+		{"binary", Options{Binary: true}},
 	}
-	if !Options{Grayscale: true}.transform() {
-		t.Error("grayscale-only options should trigger transform")
-	}
-	if !Options{Binary: true}.transform() {
-		t.Error("binary-only options should trigger transform")
+	for _, tt := range tests {
+		if !tt.opt.transform() {
+			t.Errorf("%s options should trigger transform", tt.name)
+		}
 	}
 }

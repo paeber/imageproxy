@@ -5,9 +5,9 @@ on:
     branches: ["main"]
     tags: ["v*"]
   pull_request:
-    # Run the workflow on pull_request events to ensure we can still build the image.
-    # We only publish the image on push events (see if statements in steps below).
+    # Build on PRs to verify the image still compiles; publish only on push.
     branches: ["main"]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -29,7 +29,7 @@ jobs:
 
       - name: Log into registry ${{ env.REGISTRY }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -42,26 +42,28 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=sha,prefix=sha-
 
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
         with:
           context: .
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
 
       # Sign the Docker image
       - name: Install cosign
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb #v3.8.2
       - name: Sign the published Docker image
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_YES: "true"
         run: cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}

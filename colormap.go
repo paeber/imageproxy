@@ -183,6 +183,9 @@ func (m *paletteMatcher) matchLab(r, g, b uint8) color.Color {
 	if s < m.satMin {
 		return m.matchAchromatic(v)
 	}
+	if len(m.chromatic) == 0 {
+		return m.matchAchromatic(v)
+	}
 
 	best := m.chromatic[0].c
 	bestDist := math.MaxFloat64
@@ -210,16 +213,6 @@ func nearestColorRGB(r, g, b uint8, palette []color.NRGBA) color.Color {
 		}
 	}
 	return best
-}
-
-func nearestColor(c color.Color, palette []color.Color) color.Color {
-	r, g, b, _ := colorToRGBA8(c)
-	colors := make([]color.NRGBA, len(palette))
-	for i, p := range palette {
-		r8, g8, b8, _ := colorToRGBA8(p)
-		colors[i] = color.NRGBA{R: r8, G: g8, B: b8, A: 255}
-	}
-	return nearestColorRGB(r, g, b, colors)
 }
 
 func rgbToHSV(r, g, b uint8) (h, s, v float64) {
