@@ -67,7 +67,7 @@ func newPaletteMatcher(colors []color.Color, cfg PaletteMapConfig) *paletteMatch
 	for _, c := range colors {
 		r, g, b, _ := colorToRGBA8(c)
 		h, s, v := rgbToHSV(r, g, b)
-		L, a, bLab := rgbToLab(r, g, b)
+		L, aLab, bLab := rgbToLab(r, g, b)
 		entry := paletteEntry{
 			c:          color.NRGBA{R: r, G: g, B: b, A: 255},
 			h:          h,
