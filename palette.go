@@ -45,9 +45,9 @@ func LookupPalette(id string) (Palette, error) {
 	return p, nil
 }
 
-func colorToRGBA8(c color.Color) (r, g, b, a uint8) {
-	cr, cg, cb, ca := c.RGBA()
-	return uint8(cr >> 8), uint8(cg >> 8), uint8(cb >> 8), uint8(ca >> 8)
+func colorToRGBA8(c color.Color) (uint8, uint8, uint8) {
+	cr, cg, cb, _ := c.RGBA()
+	return uint8(cr >> 8), uint8(cg >> 8), uint8(cb >> 8)
 }
 
 func clampByte(v float64) uint8 {
@@ -69,7 +69,7 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 	if !cfg.Dither {
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				r, g, b, _ := colorToRGBA8(img.At(x, y))
+				r, g, b := colorToRGBA8(img.At(x, y))
 				out.Set(x, y, matcher.match(r, g, b))
 			}
 		}
@@ -82,13 +82,13 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
-			r, g, b, _ := colorToRGBA8(px)
+			r, g, b := colorToRGBA8(px)
 			i := y*w + x
 			oldR := float64(r) + buf[i][0]
 			oldG := float64(g) + buf[i][1]
 			oldB := float64(b) + buf[i][2]
 			nearest := matcher.match(clampByte(oldR), clampByte(oldG), clampByte(oldB))
-			nr, ng, nb, _ := colorToRGBA8(nearest)
+			nr, ng, nb := colorToRGBA8(nearest)
 			out.Set(bounds.Min.X+x, bounds.Min.Y+y, nearest)
 
 			errR := oldR - float64(nr)
@@ -139,7 +139,7 @@ func mapToBinary(img image.Image, threshold int) image.Image {
 	white := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := colorToRGBA8(img.At(x, y))
+			r, g, b := colorToRGBA8(img.At(x, y))
 			lum := int(r)*299 + int(g)*587 + int(b)*114
 			if lum >= threshold*1000 {
 				out.Set(x, y, white)
