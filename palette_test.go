@@ -67,8 +67,8 @@ func TestPaletteMatcherHue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := matcher.match(tt.in.R, tt.in.G, tt.in.B)
-			gr, gg, gb, _ := colorToRGBA8(got)
-			wr, wg, wb, _ := colorToRGBA8(tt.want)
+			gr, gg, gb := colorToRGBA8(got)
+			wr, wg, wb := colorToRGBA8(tt.want)
 			if gr != wr || gg != wg || gb != wb {
 				t.Errorf("match(%v) = (%d,%d,%d), want (%d,%d,%d)", tt.in, gr, gg, gb, wr, wg, wb)
 			}
@@ -84,7 +84,7 @@ func TestPaletteMatcherRGB(t *testing.T) {
 	matcher := newPaletteMatcher(palette.Colors, PaletteMapConfig{Mode: "rgb"})
 
 	got := matcher.match(128, 128, 128)
-	gr, gg, gb, _ := colorToRGBA8(got)
+	gr, gg, gb := colorToRGBA8(got)
 	if gr != 0 || gg != 0 || gb != 0 {
 		t.Errorf("rgb mode gray mapped to (%d,%d,%d), want black", gr, gg, gb)
 	}

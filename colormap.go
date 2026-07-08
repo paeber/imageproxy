@@ -65,7 +65,7 @@ func newPaletteMatcher(colors []color.Color, cfg PaletteMapConfig) *paletteMatch
 		vividFactor: vividFactor,
 	}
 	for _, c := range colors {
-		r, g, b, _ := colorToRGBA8(c)
+		r, g, b := colorToRGBA8(c)
 		h, s, v := rgbToHSV(r, g, b)
 		L, aLab, bLab := rgbToLab(r, g, b)
 		entry := paletteEntry{
