@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"strings"
 )
 
@@ -62,28 +63,72 @@ func clampByte(v float64) uint8 {
 
 // MapPalette maps each pixel in img to the nearest palette color.
 // When cfg.Dither is true, Floyd-Steinberg error diffusion is applied.
+// Structure-aware options use region colors in flat areas, edge-aware dither
+// at boundaries, and an optional structure overlay for high-contrast edges.
 func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Image {
 	matcher := newPaletteMatcher(palette.Colors, cfg)
 	bounds := img.Bounds()
 	out := image.NewNRGBA(bounds)
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	var regionColors map[int]color.Color
+	if cfg.Structure != nil && cfg.Structure.RegionIDs != nil {
+		regionColors = regionDominantColors(img, bounds, cfg.Structure.RegionIDs, matcher)
+	}
+
+	interiorThreshold := cfg.EdgeThreshold * 0.5
+	if interiorThreshold <= 0 {
+		interiorThreshold = 0.15
+	}
+
+	black := color.NRGBA{R: 0, G: 0, B: 0, A: 255}
+	white := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+
 	if !cfg.Dither {
-		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				r, g, b := colorToRGBA8(img.At(x, y))
-				out.Set(x, y, matcher.match(r, g, b))
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				if cfg.StructureOverlay && cfg.Structure != nil && cfg.Structure.EdgeMask != nil && cfg.Structure.EdgeMask[y*w+x] {
+					applyStructureOverlayAt(img, bounds, out, x, y, black, white)
+					continue
+				}
+				if regionColors != nil && isRegionInterior(cfg.Structure, x, y, interiorThreshold) {
+					out.Set(bounds.Min.X+x, bounds.Min.Y+y, regionColors[cfg.Structure.RegionIDs[y*w+x]])
+					continue
+				}
+				r, g, b := colorToRGBA8(img.At(bounds.Min.X+x, bounds.Min.Y+y))
+				out.Set(bounds.Min.X+x, bounds.Min.Y+y, matcher.match(r, g, b))
 			}
 		}
 		return out
 	}
 
-	w := bounds.Dx()
-	h := bounds.Dy()
 	buf := make([][3]float64, w*h)
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
+			i := y*w + x
+			if cfg.StructureOverlay && cfg.Structure != nil && cfg.Structure.EdgeMask != nil && cfg.Structure.EdgeMask[i] {
+				applyStructureOverlayAt(img, bounds, out, x, y, black, white)
+				continue
+			}
+			if regionColors != nil && isRegionInterior(cfg.Structure, x, y, interiorThreshold) {
+				c := regionColors[cfg.Structure.RegionIDs[i]]
+				out.Set(bounds.Min.X+x, bounds.Min.Y+y, c)
+				nr, ng, nb := colorToRGBA8(c)
+				px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
+				r, g, b := colorToRGBA8(px)
+				oldR := float64(r) + buf[i][0]
+				oldG := float64(g) + buf[i][1]
+				oldB := float64(b) + buf[i][2]
+				errR := oldR - float64(nr)
+				errG := oldG - float64(ng)
+				errB := oldB - float64(nb)
+				diffuseFloydSteinberg(buf, w, h, x, y, errR, errG, errB, cfg)
+				continue
+			}
+
 			px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
 			r, g, b := colorToRGBA8(px)
-			i := y*w + x
 			oldR := float64(r) + buf[i][0]
 			oldG := float64(g) + buf[i][1]
 			oldB := float64(b) + buf[i][2]
@@ -94,21 +139,48 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 			errR := oldR - float64(nr)
 			errG := oldG - float64(ng)
 			errB := oldB - float64(nb)
-			diffuseFloydSteinberg(buf, w, h, x, y, errR, errG, errB)
+			diffuseFloydSteinberg(buf, w, h, x, y, errR, errG, errB, cfg)
 		}
 	}
 	return out
 }
 
-func diffuseFloydSteinberg(buf [][3]float64, w, h, x, y int, errR, errG, errB float64) {
+func diffuseFloydSteinberg(buf [][3]float64, w, h, x, y int, errR, errG, errB float64, cfg PaletteMapConfig) {
+	edgeAt := func(nx, ny int) float64 {
+		if cfg.Structure == nil || cfg.Structure.EdgeMap == nil {
+			return 0
+		}
+		if nx < 0 || nx >= w || ny < 0 || ny >= h {
+			return 0
+		}
+		return cfg.Structure.EdgeMap[ny*w+nx]
+	}
+
+	srcEdge := edgeAt(x, y)
+	attenuate := func(nx, ny int, factor float64) float64 {
+		if !cfg.DitherEdge {
+			return factor
+		}
+		neighborEdge := edgeAt(nx, ny)
+		strength := math.Max(srcEdge, neighborEdge)
+		if cfg.EdgeThreshold > 0 && strength >= cfg.EdgeThreshold {
+			return 0
+		}
+		return factor * (1.0 - strength)
+	}
+
 	add := func(nx, ny int, factor float64) {
 		if nx < 0 || nx >= w || ny < 0 || ny >= h {
 			return
 		}
+		f := attenuate(nx, ny, factor)
+		if f == 0 {
+			return
+		}
 		i := ny*w + nx
-		buf[i][0] += errR * factor
-		buf[i][1] += errG * factor
-		buf[i][2] += errB * factor
+		buf[i][0] += errR * f
+		buf[i][1] += errG * f
+		buf[i][2] += errB * f
 	}
 	add(x+1, y, 7.0/16.0)
 	add(x-1, y+1, 3.0/16.0)

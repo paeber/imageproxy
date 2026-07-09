@@ -128,6 +128,53 @@ func TestMapPaletteDither(t *testing.T) {
 	}
 }
 
+func TestMapPaletteRegionsUniformFill(t *testing.T) {
+	palette, err := LookupPalette("E1002")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := newImage(20, 20, color.NRGBA{255, 0, 0, 255})
+	opt := ParseOptions("regions8")
+	ctx := buildStructureContext(src, opt)
+	cfg := paletteMapConfigFromOptions(opt, ctx)
+	out := MapPalette(src, palette, cfg)
+
+	// Interior pixels in a uniform red image should share the same palette color.
+	interiorColors := make(map[color.Color]bool)
+	for y := 5; y < 15; y++ {
+		for x := 5; x < 15; x++ {
+			if isRegionInterior(ctx, x, y, 0.15) {
+				interiorColors[out.At(x, y)] = true
+			}
+		}
+	}
+	if len(interiorColors) != 1 {
+		t.Errorf("uniform region interior should be one palette color, got %d", len(interiorColors))
+	}
+}
+
+func TestMapPaletteCoverPaletteColors(t *testing.T) {
+	palette, err := LookupPalette("E1002")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := newImage(40, 40, color.NRGBA{180, 100, 100, 255})
+	opt := ParseOptions("cover")
+	ctx := buildStructureContext(src, opt)
+	cfg := paletteMapConfigFromOptions(opt, ctx)
+	out := MapPalette(src, palette, cfg)
+
+	for y := 0; y < out.Bounds().Dy(); y++ {
+		for x := 0; x < out.Bounds().Dx(); x++ {
+			if !paletteContains(out.At(x, y), palette.Colors) {
+				t.Errorf("pixel (%d,%d) not in palette", x, y)
+			}
+		}
+	}
+}
+
 func TestMapToBinary(t *testing.T) {
 	src := newImage(2, 2, color.NRGBA{0, 0, 0, 255}, color.NRGBA{255, 255, 255, 255}, color.NRGBA{0, 0, 0, 255}, color.NRGBA{255, 255, 255, 255})
 	out := mapToBinary(src, 128)

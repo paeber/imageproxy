@@ -59,6 +59,23 @@ func TestApplyColorProcessingPalettePrecedence(t *testing.T) {
 	}
 }
 
+func TestApplyColorProcessingCover(t *testing.T) {
+	src := newImage(40, 40, color.NRGBA{180, 100, 100, 255})
+	out := applyColorProcessing(src, Options{Palette: "E1002", CoverPreset: true, PaletteVivid: true, PaletteSatMin: 10, StructureRegions: 12, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1, StructureOverlay: true})
+
+	palette, err := LookupPalette("E1002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for y := 0; y < out.Bounds().Dy(); y++ {
+		for x := 0; x < out.Bounds().Dx(); x++ {
+			if !paletteContains(out.At(x, y), palette.Colors) {
+				t.Errorf("pixel (%d,%d) not in palette", x, y)
+			}
+		}
+	}
+}
+
 func TestOptionsTransformColor(t *testing.T) {
 	tests := []struct {
 		name string

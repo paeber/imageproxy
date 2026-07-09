@@ -103,6 +103,12 @@ such as ePaper panels.
 | `pmrgb` | Legacy weighted RGB distance matching |
 | `sat{N}` | Chroma threshold 1–100 (default 15); lower keeps more light colors chromatic |
 | `vivid` | Boost saturation before mapping (recommended for album art and graphics) |
+| `cover` | Balanced album-art preset (structure-aware processing; see below) |
+| `ditheredge` | Edge-aware Floyd-Steinberg dithering (attenuates diffusion across edges) |
+| `edge{N}` | Edge detection threshold 1–100 for structure processing |
+| `dilate{N}` | Dilate structure mask by N pixels (0–5); thickens detected edges/text |
+| `erode{N}` | Erode structure mask by N pixels (0–5); reduces edge noise before dilation |
+| `regions{N}` | Region segmentation count 4–32 for solid color blocks |
 
 Predefined palette IDs:
 
@@ -118,10 +124,33 @@ http://localhost/800x480,palE1002,png/https://example.com/photo.jpg
 http://localhost/800x480,palE1002,dither,png/https://example.com/photo.jpg
 http://localhost/800x480,palE1002,vivid,dither,png/https://example.com/cover.jpg
 http://localhost/800x480,palE1002,vivid,dither,sat10,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,cover,png/https://example.com/cover.jpg
 http://localhost/0x0,palE1002,png/https://example.com/photo.jpg
 ```
 
-For music covers and artwork, use `vivid` with `dither`. If light blues or pinks
+#### Album covers (`cover` preset)
+
+For music covers on six-color ePaper, the `cover` preset combines region-based
+quantization, edge-aware dithering, and a structure contrast overlay. It reduces
+dither grain in flat areas, preserves color blocks, and helps separate text or
+logos from similarly tinted backgrounds.
+
+`cover` enables: `vivid`, `sat10`, `regions12`, `ditheredge`, `edge30`, `dilate1`,
+and structure overlay. Override any setting with explicit options:
+
+```
+http://localhost/800x480,palE1002,cover,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,cover,regions8,edge50,png/https://example.com/cover.jpg
+```
+
+Tuning guide:
+
+- **More solid color areas, less grain** — increase `regions` (e.g. `regions16`)
+- **Sharper text/logos** — lower `edge` threshold (e.g. `edge20`) or increase `dilate`
+- **Softer, more photographic look** — use `palE1002,vivid,ditheredge,regions16` without `cover`
+- **Less structure emphasis** — omit `cover` and use `vivid,dither` for the classic pipeline
+
+For music covers without structure processing, use `vivid` with `dither`. If light blues or pinks
 still wash out, lower the chroma threshold with `sat10` or `sat5`.
 
 The [smart crop feature](https://pkg.go.dev/willnorris.com/go/imageproxy#hdr-Smart_Crop-ParseOptions)

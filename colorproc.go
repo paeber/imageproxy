@@ -20,7 +20,11 @@ func applyColorProcessing(m image.Image, opt Options) image.Image {
 			log.Printf("palette error: %v", err)
 			return m
 		}
-		return MapPalette(m, palette, paletteMapConfigFromOptions(opt))
+		var structure *StructureContext
+		if opt.structureEnabled() {
+			structure = buildStructureContext(m, opt)
+		}
+		return MapPalette(m, palette, paletteMapConfigFromOptions(opt, structure))
 	}
 	if opt.Binary {
 		gray := imaging.Grayscale(m)

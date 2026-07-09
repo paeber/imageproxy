@@ -45,6 +45,12 @@ const (
 	optPaletteModeRGB  = "pmrgb"
 	optPaletteSatPrefix = "sat"
 	optPaletteVivid    = "vivid"
+	optCover           = "cover"
+	optDitherEdge      = "ditheredge"
+	optEdgePrefix      = "edge"
+	optDilatePrefix    = "dilate"
+	optErodePrefix     = "erode"
+	optRegionsPrefix   = "regions"
 )
 
 // URLError reports a malformed URL error.
@@ -125,6 +131,25 @@ type Options struct {
 
 	// Boost saturation before palette mapping (useful for album art and graphics).
 	PaletteVivid bool
+
+	// Cover preset enables balanced structure-aware album art processing.
+	CoverPreset bool
+
+	// Edge-aware Floyd-Steinberg dithering; attenuates diffusion across edges.
+	DitherEdge bool
+
+	// Structure processing: edge detection threshold 1-100 (0 = unset).
+	StructureEdge int
+
+	// Morphological dilation/erosion radius for structure mask (0-5).
+	StructureDilate int
+	StructureErode  int
+
+	// Region count for posterization-based segmentation (4-32, 0 = unset).
+	StructureRegions int
+
+	// Force high-contrast black/white at detected structure edges.
+	StructureOverlay bool
 }
 
 func (o Options) String() string {
@@ -200,6 +225,24 @@ func (o Options) String() string {
 	}
 	if o.PaletteVivid {
 		opts = append(opts, optPaletteVivid)
+	}
+	if o.CoverPreset {
+		opts = append(opts, optCover)
+	}
+	if o.DitherEdge {
+		opts = append(opts, optDitherEdge)
+	}
+	if o.StructureEdge > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optEdgePrefix, o.StructureEdge))
+	}
+	if o.StructureDilate > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optDilatePrefix, o.StructureDilate))
+	}
+	if o.StructureErode > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optErodePrefix, o.StructureErode))
+	}
+	if o.StructureRegions > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optRegionsPrefix, o.StructureRegions))
 	}
 
 	sort.Strings(opts)
@@ -358,6 +401,17 @@ func (o Options) transform() bool {
 //	vivid       - boost saturation before mapping (recommended for album art)
 //
 //	800x480,palE1002,vivid,dither - vivid album cover with dithering
+//
+// Album cover preset and structure-aware processing:
+//
+//	cover       - balanced preset for album art (vivid, sat10, regions12, ditheredge, edge30, dilate1)
+//	ditheredge  - edge-aware Floyd-Steinberg dithering
+//	edge{N}     - edge detection threshold 1-100
+//	dilate{N}   - dilate structure mask by N pixels (0-5)
+//	erode{N}    - erode structure mask by N pixels (0-5)
+//	regions{N}  - region segmentation count 4-32
+//
+//	800x480,palE1002,cover,png - recommended album cover URL
 func ParseOptions(str string) Options {
 	var options Options
 
@@ -393,6 +447,27 @@ func ParseOptions(str string) Options {
 			options.PaletteMode = "rgb"
 		case opt == optPaletteVivid:
 			options.PaletteVivid = true
+		case opt == optCover:
+			options.CoverPreset = true
+		case opt == optDitherEdge:
+			options.DitherEdge = true
+			options.Dither = true
+		case strings.HasPrefix(opt, optEdgePrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optEdgePrefix)); err == nil && v > 0 && v <= 100 {
+				options.StructureEdge = v
+			}
+		case strings.HasPrefix(opt, optDilatePrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optDilatePrefix)); err == nil && v >= 0 && v <= 5 {
+				options.StructureDilate = v
+			}
+		case strings.HasPrefix(opt, optErodePrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optErodePrefix)); err == nil && v >= 0 && v <= 5 {
+				options.StructureErode = v
+			}
+		case strings.HasPrefix(opt, optRegionsPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optRegionsPrefix)); err == nil && v >= 4 && v <= 32 {
+				options.StructureRegions = v
+			}
 		case strings.HasPrefix(opt, optPaletteSatPrefix):
 			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optPaletteSatPrefix)); err == nil && v > 0 && v <= 100 {
 				options.PaletteSatMin = v
@@ -447,7 +522,35 @@ func ParseOptions(str string) Options {
 		}
 	}
 
+	applyCoverPreset(&options)
 	return options
+}
+
+func applyCoverPreset(o *Options) {
+	if !o.CoverPreset {
+		return
+	}
+	o.PaletteVivid = true
+	if o.PaletteSatMin == 0 {
+		o.PaletteSatMin = 10
+	}
+	if o.StructureRegions == 0 {
+		o.StructureRegions = defaultCoverRegions
+	}
+	o.DitherEdge = true
+	o.Dither = true
+	if o.StructureEdge == 0 {
+		o.StructureEdge = defaultCoverEdge
+	}
+	if o.StructureDilate == 0 {
+		o.StructureDilate = defaultCoverDilate
+	}
+	o.StructureOverlay = true
+}
+
+func (o Options) structureEnabled() bool {
+	return o.CoverPreset || o.DitherEdge || o.StructureOverlay ||
+		o.StructureEdge > 0 || o.StructureDilate > 0 || o.StructureErode > 0 || o.StructureRegions > 0
 }
 
 // Request is an imageproxy request which includes a remote URL of an image to

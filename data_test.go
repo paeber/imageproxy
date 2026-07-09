@@ -119,6 +119,9 @@ func TestParseOptions(t *testing.T) {
 		{"bw,palE1002", Options{Palette: "E1002"}},
 		{"palE1002,vivid,dither,sat10", Options{Palette: "E1002", PaletteVivid: true, Dither: true, PaletteSatMin: 10}},
 		{"palE1002,pmrgb", Options{Palette: "E1002", PaletteMode: "rgb"}},
+		{"cover", Options{CoverPreset: true, PaletteVivid: true, PaletteSatMin: 10, StructureRegions: 12, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1, StructureOverlay: true}},
+		{"edge30,dilate2,regions12,ditheredge", Options{DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 2, StructureRegions: 12}},
+		{"palE1002,cover,regions8", Options{Palette: "E1002", CoverPreset: true, PaletteVivid: true, PaletteSatMin: 10, StructureRegions: 8, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1, StructureOverlay: true}},
 	}
 
 	for _, tt := range tests {

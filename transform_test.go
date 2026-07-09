@@ -420,6 +420,52 @@ func TestTransformPalette(t *testing.T) {
 	}
 }
 
+func TestTransformCoverTextContrast(t *testing.T) {
+	// Similar-hue background with a darker horizontal "text" stroke.
+	bg := color.NRGBA{R: 200, G: 120, B: 120, A: 255}
+	text := color.NRGBA{R: 80, G: 40, B: 40, A: 255}
+	src := newImage(80, 40, bg)
+	m := src.(*image.NRGBA)
+	for y := 15; y < 25; y++ {
+		for x := 10; x < 70; x++ {
+			m.Set(x, y, text)
+		}
+	}
+
+	buf := new(bytes.Buffer)
+	if err := png.Encode(buf, src); err != nil {
+		t.Fatalf("error encoding reference image: %v", err)
+	}
+
+	opt := ParseOptions("palE1002,cover,png")
+	out, err := Transform(buf.Bytes(), opt)
+	if err != nil {
+		t.Fatalf("Transform with cover returned error: %v", err)
+	}
+
+	d, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("error decoding transformed image: %v", err)
+	}
+
+	isBW := func(c color.Color) bool {
+		r, g, b := colorToRGBA8(c)
+		return (r == 0 && g == 0 && b == 0) || (r == 255 && g == 255 && b == 255)
+	}
+
+	textBW := 0
+	for y := 15; y < 25; y++ {
+		for x := 10; x < 70; x++ {
+			if isBW(d.At(x, y)) {
+				textBW++
+			}
+		}
+	}
+	if textBW == 0 {
+		t.Error("structure overlay should produce contrasting pixels along text stroke")
+	}
+}
+
 func TestTrimEdges(t *testing.T) {
 	x := color.NRGBA{255, 255, 255, 255}
 	o := color.NRGBA{0, 0, 0, 255}

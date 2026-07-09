@@ -15,18 +15,37 @@ const (
 
 // PaletteMapConfig controls how source colors are matched to a fixed palette.
 type PaletteMapConfig struct {
-	Dither bool
-	Mode   string // "hue" (default), "lab", or "rgb"
-	SatMin int    // achromatic threshold 1-100; 0 uses default
-	Vivid  bool   // boost saturation before matching (useful for album art)
+	Dither     bool
+	DitherEdge bool // attenuate error diffusion across strong edges
+	Mode       string
+	SatMin     int
+	Vivid      bool
+
+	Structure        *StructureContext
+	StructureOverlay bool
+	EdgeThreshold    float64 // 0-1, for interior detection and dither attenuation
 }
 
-func paletteMapConfigFromOptions(opt Options) PaletteMapConfig {
+func paletteMapConfigFromOptions(opt Options, structure *StructureContext) PaletteMapConfig {
+	dither := opt.Dither || opt.DitherEdge
+	_, _, _, _, overlay := structureConfigFromOptions(opt)
+
+	edgeThreshold := 0.0
+	if opt.StructureEdge > 0 {
+		edgeThreshold = float64(opt.StructureEdge) / 100.0
+	} else if opt.CoverPreset {
+		edgeThreshold = float64(defaultCoverEdge) / 100.0
+	}
+
 	return PaletteMapConfig{
-		Dither: opt.Dither,
-		Mode:   opt.PaletteMode,
-		SatMin: opt.PaletteSatMin,
-		Vivid:  opt.PaletteVivid,
+		Dither:           dither,
+		DitherEdge:       opt.DitherEdge || opt.CoverPreset,
+		Mode:             opt.PaletteMode,
+		SatMin:           opt.PaletteSatMin,
+		Vivid:            opt.PaletteVivid,
+		Structure:        structure,
+		StructureOverlay: overlay,
+		EdgeThreshold:    edgeThreshold,
 	}
 }
 
