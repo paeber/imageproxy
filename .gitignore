@@ -2,3 +2,4 @@
 ./imageproxy
 *.png
 *.exe
+test/report/

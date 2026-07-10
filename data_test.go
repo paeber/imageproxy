@@ -122,6 +122,14 @@ func TestParseOptions(t *testing.T) {
 		{"cover", Options{CoverPreset: true, PaletteVivid: true, PaletteSatMin: 10, StructureRegions: 12, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1, StructureOverlay: true}},
 		{"edge30,dilate2,regions12,ditheredge", Options{DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 2, StructureRegions: 12}},
 		{"palE1002,cover,regions8", Options{Palette: "E1002", CoverPreset: true, PaletteVivid: true, PaletteSatMin: 10, StructureRegions: 8, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1, StructureOverlay: true}},
+		{"coverpm", Options{CoverPMPreset: true, PaletteMode: "rgb", StructureRegions: 12, DitherEdge: true, Dither: true, StructureEdge: 30, StructureDilate: 1}},
+		{"palE1002,pmrgb,dither,dithersmooth30", Options{Palette: "E1002", PaletteMode: "rgb", Dither: true, DitherSmooth: 30}},
+		{"palE1002,ditheramt50", Options{Palette: "E1002", DitherAmount: 50}},
+		{"palE1002,fillflat,outline", Options{Palette: "E1002", FillFlat: true, Outline: true}},
+		{"palE1002,smooth2", Options{Palette: "E1002", SmoothPasses: 2}},
+		{"palE1002,segfzh500", Options{Palette: "E1002", SegFZH: 500}},
+		{"palE1002,protectedge3", Options{Palette: "E1002", ProtectEdge: 3}},
+		{"palE1002,saliency,dither", Options{Palette: "E1002", Saliency: true, Dither: true}},
 	}
 
 	for _, tt := range tests {

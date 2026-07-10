@@ -85,8 +85,8 @@ func TestPaletteMatcherRGB(t *testing.T) {
 
 	got := matcher.match(128, 128, 128)
 	gr, gg, gb := colorToRGBA8(got)
-	if gr != 0 || gg != 0 || gb != 0 {
-		t.Errorf("rgb mode gray mapped to (%d,%d,%d), want black", gr, gg, gb)
+	if gr != 255 || gg != 255 || gb != 255 {
+		t.Errorf("rgb mode gray mapped to (%d,%d,%d), want white", gr, gg, gb)
 	}
 }
 

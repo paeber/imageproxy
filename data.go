@@ -46,11 +46,20 @@ const (
 	optPaletteSatPrefix = "sat"
 	optPaletteVivid    = "vivid"
 	optCover           = "cover"
+	optCoverPM         = "coverpm"
 	optDitherEdge      = "ditheredge"
 	optEdgePrefix      = "edge"
 	optDilatePrefix    = "dilate"
 	optErodePrefix     = "erode"
 	optRegionsPrefix   = "regions"
+	optDitherSmoothPrefix = "dithersmooth"
+	optSmoothPrefix    = "smooth"
+	optFillFlat        = "fillflat"
+	optOutline         = "outline"
+	optProtectEdgePrefix = "protectedge"
+	optDitherAmtPrefix = "ditheramt"
+	optSegFZHPrefix    = "segfzh"
+	optSaliency        = "saliency"
 )
 
 // URLError reports a malformed URL error.
@@ -135,8 +144,35 @@ type Options struct {
 	// Cover preset enables balanced structure-aware album art processing.
 	CoverPreset bool
 
+	// CoverPMPreset enables pmrgb+dither structure-aware album art processing.
+	CoverPMPreset bool
+
 	// Edge-aware Floyd-Steinberg dithering; attenuates diffusion across edges.
 	DitherEdge bool
+
+	// DitherSmooth gates dithering in low-activity (smooth) regions; 1-100 threshold.
+	DitherSmooth int
+
+	// SmoothPasses applies separable pre-smoothing before palette mapping (1-5).
+	SmoothPasses int
+
+	// FillFlat uses region-dominant colors in interiors; dither near boundaries only.
+	FillFlat bool
+
+	// Outline draws morphological-gradient edges in black and white.
+	Outline bool
+
+	// ProtectEdge widens the zero-diffusion band around edges (1-5 pixels).
+	ProtectEdge int
+
+	// DitherAmount scales Floyd-Steinberg error diffusion (0-100, default 100).
+	DitherAmount int
+
+	// SegFZH enables Felzenszwalb segmentation; K scale parameter 100-2000.
+	SegFZH int
+
+	// Saliency modulates dither strength using a simple saliency proxy.
+	Saliency bool
 
 	// Structure processing: edge detection threshold 1-100 (0 = unset).
 	StructureEdge int
@@ -229,6 +265,9 @@ func (o Options) String() string {
 	if o.CoverPreset {
 		opts = append(opts, optCover)
 	}
+	if o.CoverPMPreset {
+		opts = append(opts, optCoverPM)
+	}
 	if o.DitherEdge {
 		opts = append(opts, optDitherEdge)
 	}
@@ -243,6 +282,30 @@ func (o Options) String() string {
 	}
 	if o.StructureRegions > 0 {
 		opts = append(opts, fmt.Sprintf("%s%d", optRegionsPrefix, o.StructureRegions))
+	}
+	if o.DitherSmooth > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optDitherSmoothPrefix, o.DitherSmooth))
+	}
+	if o.SmoothPasses > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optSmoothPrefix, o.SmoothPasses))
+	}
+	if o.FillFlat {
+		opts = append(opts, optFillFlat)
+	}
+	if o.Outline {
+		opts = append(opts, optOutline)
+	}
+	if o.ProtectEdge > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optProtectEdgePrefix, o.ProtectEdge))
+	}
+	if o.DitherAmount > 0 && o.DitherAmount != 100 {
+		opts = append(opts, fmt.Sprintf("%s%d", optDitherAmtPrefix, o.DitherAmount))
+	}
+	if o.SegFZH > 0 {
+		opts = append(opts, fmt.Sprintf("%s%d", optSegFZHPrefix, o.SegFZH))
+	}
+	if o.Saliency {
+		opts = append(opts, optSaliency)
 	}
 
 	sort.Strings(opts)
@@ -449,6 +512,14 @@ func ParseOptions(str string) Options {
 			options.PaletteVivid = true
 		case opt == optCover:
 			options.CoverPreset = true
+		case opt == optCoverPM:
+			options.CoverPMPreset = true
+		case opt == optFillFlat:
+			options.FillFlat = true
+		case opt == optOutline:
+			options.Outline = true
+		case opt == optSaliency:
+			options.Saliency = true
 		case opt == optDitherEdge:
 			options.DitherEdge = true
 			options.Dither = true
@@ -467,6 +538,26 @@ func ParseOptions(str string) Options {
 		case strings.HasPrefix(opt, optRegionsPrefix):
 			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optRegionsPrefix)); err == nil && v >= 4 && v <= 32 {
 				options.StructureRegions = v
+			}
+		case strings.HasPrefix(opt, optDitherSmoothPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optDitherSmoothPrefix)); err == nil && v > 0 && v <= 100 {
+				options.DitherSmooth = v
+			}
+		case strings.HasPrefix(opt, optSmoothPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optSmoothPrefix)); err == nil && v >= 1 && v <= 5 {
+				options.SmoothPasses = v
+			}
+		case strings.HasPrefix(opt, optProtectEdgePrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optProtectEdgePrefix)); err == nil && v >= 1 && v <= 5 {
+				options.ProtectEdge = v
+			}
+		case strings.HasPrefix(opt, optDitherAmtPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optDitherAmtPrefix)); err == nil && v >= 0 && v <= 100 {
+				options.DitherAmount = v
+			}
+		case strings.HasPrefix(opt, optSegFZHPrefix):
+			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optSegFZHPrefix)); err == nil && v >= 100 && v <= 2000 {
+				options.SegFZH = v
 			}
 		case strings.HasPrefix(opt, optPaletteSatPrefix):
 			if v, err := strconv.Atoi(strings.TrimPrefix(opt, optPaletteSatPrefix)); err == nil && v > 0 && v <= 100 {
@@ -523,6 +614,7 @@ func ParseOptions(str string) Options {
 	}
 
 	applyCoverPreset(&options)
+	applyCoverPMPreset(&options)
 	return options
 }
 
@@ -548,9 +640,35 @@ func applyCoverPreset(o *Options) {
 	o.StructureOverlay = true
 }
 
+func applyCoverPMPreset(o *Options) {
+	if !o.CoverPMPreset {
+		return
+	}
+	o.PaletteMode = "rgb"
+	if o.StructureRegions == 0 {
+		o.StructureRegions = defaultCoverRegions
+	}
+	o.DitherEdge = true
+	o.Dither = true
+	if o.StructureEdge == 0 {
+		o.StructureEdge = defaultCoverEdge
+	}
+	if o.StructureDilate == 0 {
+		o.StructureDilate = defaultCoverDilate
+	}
+}
+
 func (o Options) structureEnabled() bool {
-	return o.CoverPreset || o.DitherEdge || o.StructureOverlay ||
-		o.StructureEdge > 0 || o.StructureDilate > 0 || o.StructureErode > 0 || o.StructureRegions > 0
+	return o.CoverPreset || o.CoverPMPreset || o.DitherEdge || o.StructureOverlay ||
+		o.StructureEdge > 0 || o.StructureDilate > 0 || o.StructureErode > 0 || o.StructureRegions > 0 ||
+		o.DitherSmooth > 0 || o.FillFlat || o.Outline || o.ProtectEdge > 0 || o.SegFZH > 0 || o.Saliency
+}
+
+func (o Options) ditherAmountScale() float64 {
+	if o.DitherAmount <= 0 {
+		return 1.0
+	}
+	return float64(o.DitherAmount) / 100.0
 }
 
 // Request is an imageproxy request which includes a remote URL of an image to

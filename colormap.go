@@ -24,6 +24,11 @@ type PaletteMapConfig struct {
 	Structure        *StructureContext
 	StructureOverlay bool
 	EdgeThreshold    float64 // 0-1, for interior detection and dither attenuation
+	DitherSmooth     int     // activity threshold 1-100
+	FillFlat         bool
+	Outline          bool
+	DitherAmount     float64 // 0-1 scale
+	Saliency         bool
 }
 
 func paletteMapConfigFromOptions(opt Options, structure *StructureContext) PaletteMapConfig {
@@ -39,13 +44,18 @@ func paletteMapConfigFromOptions(opt Options, structure *StructureContext) Palet
 
 	return PaletteMapConfig{
 		Dither:           dither,
-		DitherEdge:       opt.DitherEdge || opt.CoverPreset,
+		DitherEdge:       opt.DitherEdge || opt.CoverPreset || opt.CoverPMPreset,
 		Mode:             opt.PaletteMode,
 		SatMin:           opt.PaletteSatMin,
 		Vivid:            opt.PaletteVivid,
 		Structure:        structure,
 		StructureOverlay: overlay,
 		EdgeThreshold:    edgeThreshold,
+		DitherSmooth:     opt.DitherSmooth,
+		FillFlat:         opt.FillFlat,
+		Outline:          opt.Outline,
+		DitherAmount:     opt.ditherAmountScale(),
+		Saliency:         opt.Saliency,
 	}
 }
 

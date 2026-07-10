@@ -24,7 +24,26 @@ func applyColorProcessing(m image.Image, opt Options) image.Image {
 		if opt.structureEnabled() {
 			structure = buildStructureContext(m, opt)
 		}
-		return MapPalette(m, palette, paletteMapConfigFromOptions(opt, structure))
+		src := m
+		if opt.SmoothPasses > 0 {
+			edgeThreshold := 0.0
+			if opt.StructureEdge > 0 {
+				edgeThreshold = float64(opt.StructureEdge) / 100.0
+			} else if opt.CoverPreset || opt.CoverPMPreset {
+				edgeThreshold = float64(defaultCoverEdge) / 100.0
+			}
+			var edgeMap []float64
+			if structure != nil {
+				edgeMap = structure.EdgeMap
+			} else {
+				edgeMap = sobelEdgeMap(m, m.Bounds())
+			}
+			src = smoothImage(m, opt.SmoothPasses, edgeMap, edgeThreshold)
+			if opt.structureEnabled() {
+				structure = buildStructureContext(src, opt)
+			}
+		}
+		return MapPalette(src, palette, paletteMapConfigFromOptions(opt, structure))
 	}
 	if opt.Binary {
 		gray := imaging.Grayscale(m)
