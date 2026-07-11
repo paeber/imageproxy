@@ -33,7 +33,7 @@ type PaletteMapConfig struct {
 
 func paletteMapConfigFromOptions(opt Options, structure *StructureContext) PaletteMapConfig {
 	dither := opt.Dither || opt.DitherEdge
-	_, _, _, _, overlay := structureConfigFromOptions(opt)
+	overlay := opt.StructureOverlay || opt.CoverPreset
 
 	edgeThreshold := 0.0
 	if opt.StructureEdge > 0 {

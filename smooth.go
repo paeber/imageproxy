@@ -23,8 +23,8 @@ func smoothImage(img image.Image, passes int, edgeMap []float64, edgeThreshold f
 
 	cur := imageToFloatRGBA(img, bounds)
 	for p := 0; p < passes; p++ {
-		cur = separableBoxPass(cur, w, h, bounds, edgeMap, edgeThreshold, true)
-		cur = separableBoxPass(cur, w, h, bounds, edgeMap, edgeThreshold, false)
+		cur = separableBoxPass(cur, w, h, edgeMap, edgeThreshold, true)
+		cur = separableBoxPass(cur, w, h, edgeMap, edgeThreshold, false)
 	}
 	return floatRGBAtoImage(cur, bounds)
 }
@@ -59,7 +59,7 @@ func floatRGBAtoImage(px [][4]float64, bounds image.Rectangle) *image.NRGBA {
 	return out
 }
 
-func separableBoxPass(px [][4]float64, w, h int, bounds image.Rectangle, edgeMap []float64, edgeThreshold float64, horizontal bool) [][4]float64 {
+func separableBoxPass(px [][4]float64, w, h int, edgeMap []float64, edgeThreshold float64, horizontal bool) [][4]float64 {
 	out := make([][4]float64, len(px))
 	r := smoothKernelRadius
 
@@ -90,57 +90,42 @@ func separableBoxPass(px [][4]float64, w, h int, bounds image.Rectangle, edgeMap
 		return dst
 	}
 
-	if horizontal {
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				var sum [4]float64
-				count := 0
-				for dx := -r; dx <= r; dx++ {
-					nx := x + dx
-					if nx < 0 || nx >= w {
-						continue
-					}
-					p := px[y*w+nx]
-					sum[0] += p[0]
-					sum[1] += p[1]
-					sum[2] += p[2]
-					sum[3] += p[3]
-					count++
-				}
-				if count == 0 {
-					out[y*w+x] = px[y*w+x]
-					continue
-				}
-				avg := [4]float64{sum[0] / float64(count), sum[1] / float64(count), sum[2] / float64(count), sum[3] / float64(count)}
-				out[y*w+x] = blend(px[y*w+x], avg, x, y)
-			}
-		}
-		return out
-	}
-
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			var sum [4]float64
-			count := 0
-			for dy := -r; dy <= r; dy++ {
-				ny := y + dy
-				if ny < 0 || ny >= h {
-					continue
-				}
-				p := px[ny*w+x]
-				sum[0] += p[0]
-				sum[1] += p[1]
-				sum[2] += p[2]
-				sum[3] += p[3]
-				count++
-			}
+			avg, count := boxAverage(px, w, h, x, y, horizontal, r)
 			if count == 0 {
 				out[y*w+x] = px[y*w+x]
 				continue
 			}
-			avg := [4]float64{sum[0] / float64(count), sum[1] / float64(count), sum[2] / float64(count), sum[3] / float64(count)}
 			out[y*w+x] = blend(px[y*w+x], avg, x, y)
 		}
 	}
 	return out
+}
+
+func boxAverage(px [][4]float64, w, h, x, y int, horizontal bool, radius int) ([4]float64, int) {
+	var sum [4]float64
+	count := 0
+	for o := -radius; o <= radius; o++ {
+		nx, ny := x, y
+		if horizontal {
+			nx = x + o
+		} else {
+			ny = y + o
+		}
+		if nx < 0 || nx >= w || ny < 0 || ny >= h {
+			continue
+		}
+		p := px[ny*w+nx]
+		sum[0] += p[0]
+		sum[1] += p[1]
+		sum[2] += p[2]
+		sum[3] += p[3]
+		count++
+	}
+	if count == 0 {
+		return [4]float64{}, 0
+	}
+	inv := 1.0 / float64(count)
+	return [4]float64{sum[0] * inv, sum[1] * inv, sum[2] * inv, sum[3] * inv}, count
 }

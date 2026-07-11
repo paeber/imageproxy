@@ -3,3 +3,4 @@
 *.png
 *.exe
 test/report/
+coverage.txt

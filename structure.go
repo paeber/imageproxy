@@ -106,7 +106,7 @@ func buildStructureContext(img image.Image, opt Options) *StructureContext {
 	}
 
 	if opt.Saliency {
-		ctx.SaliencyMap = saliencyMap(img, bounds, ctx.EdgeMap)
+		ctx.SaliencyMap = saliencyMap(bounds, ctx.EdgeMap)
 	}
 
 	protectRadius := opt.ProtectEdge
@@ -286,7 +286,7 @@ func localVarianceMap(img image.Image, bounds image.Rectangle) []float64 {
 	return out
 }
 
-func saliencyMap(img image.Image, bounds image.Rectangle, edgeMap []float64) []float64 {
+func saliencyMap(bounds image.Rectangle, edgeMap []float64) []float64 {
 	w, h := bounds.Dx(), bounds.Dy()
 	out := make([]float64, w*h)
 	cx, cy := float64(w-1)/2, float64(h-1)/2
