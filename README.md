@@ -104,7 +104,16 @@ such as ePaper panels.
 | `sat{N}` | Chroma threshold 1–100 (default 15); lower keeps more light colors chromatic |
 | `vivid` | Boost saturation before mapping (recommended for album art and graphics) |
 | `cover` | Balanced album-art preset (structure-aware processing; see below) |
+| `coverpm` | Album-art preset using `pmrgb` + `dither` + `ditheredge` + `regions12` + `edge30` + `dilate1` |
 | `ditheredge` | Edge-aware Floyd-Steinberg dithering (attenuates diffusion across edges) |
+| `dithersmooth{N}` | Dither only in smooth areas; high-detail regions stay flat (1–100) |
+| `ditheramt{N}` | Scale dither strength 0–100 (default 100) |
+| `smooth{N}` | Pre-smooth before palette map, 1–5 passes (edge-aware) |
+| `fillflat` | Flat region fill in interiors; dither near boundaries |
+| `outline` | Draw morphological edge outlines in black/white |
+| `protectedge{N}` | Widen zero-diffusion band at edges, 1–5 pixels |
+| `segfzh{K}` | Felzenszwalb segmentation scale 100–2000 |
+| `saliency` | Modulate dither using center/edge saliency proxy |
 | `edge{N}` | Edge detection threshold 1–100 for structure processing |
 | `dilate{N}` | Dilate structure mask by N pixels (0–5); thickens detected edges/text |
 | `erode{N}` | Erode structure mask by N pixels (0–5); reduces edge noise before dilation |
@@ -125,10 +134,13 @@ http://localhost/800x480,palE1002,dither,png/https://example.com/photo.jpg
 http://localhost/800x480,palE1002,vivid,dither,png/https://example.com/cover.jpg
 http://localhost/800x480,palE1002,vivid,dither,sat10,png/https://example.com/cover.jpg
 http://localhost/800x480,palE1002,cover,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,coverpm,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,pmrgb,dither,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,pmrgb,dither,dithersmooth25,fillflat,outline,png/https://example.com/cover.jpg
 http://localhost/0x0,palE1002,png/https://example.com/photo.jpg
 ```
 
-#### Album covers (`cover` preset)
+#### Album covers (`cover` and `coverpm` presets)
 
 For music covers on six-color ePaper, the `cover` preset combines region-based
 quantization, edge-aware dithering, and a structure contrast overlay. It reduces
@@ -138,13 +150,22 @@ logos from similarly tinted backgrounds.
 `cover` enables: `vivid`, `sat10`, `regions12`, `ditheredge`, `edge30`, `dilate1`,
 and structure overlay. Override any setting with explicit options:
 
+`coverpm` enables: `pmrgb`, `dither`, `ditheredge`, `regions12`, `edge30`, `dilate1`
+without vivid/sat overlay — recommended when `pmrgb,dither` looks best.
+
 ```
 http://localhost/800x480,palE1002,cover,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,coverpm,png/https://example.com/cover.jpg
 http://localhost/800x480,palE1002,cover,regions8,edge50,png/https://example.com/cover.jpg
+http://localhost/800x480,palE1002,pmrgb,dither,dithersmooth30,segfzh500,fillflat,png/https://example.com/cover.jpg
 ```
 
 Tuning guide:
 
+- **Best baseline for many covers** — `palE1002,pmrgb,dither` or `coverpm`
+- **Less grain on text/detail** — add `dithersmooth25` or `fillflat`
+- **Cartoon-style outlines** — add `outline` (pairs well with `fillflat`)
+- **Finer region boundaries** — `segfzh500` or higher `regions`
 - **More solid color areas, less grain** — increase `regions` (e.g. `regions16`)
 - **Sharper text/logos** — lower `edge` threshold (e.g. `edge20`) or increase `dilate`
 - **Softer, more photographic look** — use `palE1002,vivid,ditheredge,regions16` without `cover`

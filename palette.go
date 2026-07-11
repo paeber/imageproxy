@@ -85,6 +85,19 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 	black := color.NRGBA{R: 0, G: 0, B: 0, A: 255}
 	white := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 
+	applyOutline := func() {
+		if !cfg.Outline || cfg.Structure == nil || cfg.Structure.OutlineMask == nil {
+			return
+		}
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				if cfg.Structure.OutlineMask[y*w+x] {
+					out.Set(bounds.Min.X+x, bounds.Min.Y+y, black)
+				}
+			}
+		}
+	}
+
 	if !cfg.Dither {
 		for y := 0; y < h; y++ {
 			for x := 0; x < w; x++ {
@@ -96,10 +109,23 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 					out.Set(bounds.Min.X+x, bounds.Min.Y+y, regionColors[cfg.Structure.RegionIDs[y*w+x]])
 					continue
 				}
+				if cfg.FillFlat && cfg.Structure != nil && cfg.Structure.RegionIDs != nil && !isInBoundaryBand(cfg.Structure, x, y) {
+					rid := cfg.Structure.RegionIDs[y*w+x]
+					if c, ok := regionColors[rid]; ok {
+						out.Set(bounds.Min.X+x, bounds.Min.Y+y, c)
+						continue
+					}
+				}
+				if cfg.DitherSmooth > 0 && isHighActivity(cfg.Structure, x, y, float64(cfg.DitherSmooth)/100.0) {
+					r, g, b := colorToRGBA8(img.At(bounds.Min.X+x, bounds.Min.Y+y))
+					out.Set(bounds.Min.X+x, bounds.Min.Y+y, matcher.match(r, g, b))
+					continue
+				}
 				r, g, b := colorToRGBA8(img.At(bounds.Min.X+x, bounds.Min.Y+y))
 				out.Set(bounds.Min.X+x, bounds.Min.Y+y, matcher.match(r, g, b))
 			}
 		}
+		applyOutline()
 		return out
 	}
 
@@ -127,6 +153,35 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 				continue
 			}
 
+			if cfg.FillFlat && cfg.Structure != nil && cfg.Structure.RegionIDs != nil && !isInBoundaryBand(cfg.Structure, x, y) {
+				rid := cfg.Structure.RegionIDs[i]
+				if c, ok := regionColors[rid]; ok {
+					out.Set(bounds.Min.X+x, bounds.Min.Y+y, c)
+					nr, ng, nb := colorToRGBA8(c)
+					px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
+					r, g, b := colorToRGBA8(px)
+					oldR := float64(r) + buf[i][0]
+					oldG := float64(g) + buf[i][1]
+					oldB := float64(b) + buf[i][2]
+					errR := oldR - float64(nr)
+					errG := oldG - float64(ng)
+					errB := oldB - float64(nb)
+					diffuseFloydSteinberg(buf, w, h, x, y, errR, errG, errB, cfg)
+					continue
+				}
+			}
+
+			if !shouldDitherAt(cfg.Structure, x, y, cfg.DitherSmooth) {
+				px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
+				r, g, b := colorToRGBA8(px)
+				oldR := float64(r) + buf[i][0]
+				oldG := float64(g) + buf[i][1]
+				oldB := float64(b) + buf[i][2]
+				nearest := matcher.match(clampByte(oldR), clampByte(oldG), clampByte(oldB))
+				out.Set(bounds.Min.X+x, bounds.Min.Y+y, nearest)
+				continue
+			}
+
 			px := img.At(bounds.Min.X+x, bounds.Min.Y+y)
 			r, g, b := colorToRGBA8(px)
 			oldR := float64(r) + buf[i][0]
@@ -142,10 +197,21 @@ func MapPalette(img image.Image, palette Palette, cfg PaletteMapConfig) image.Im
 			diffuseFloydSteinberg(buf, w, h, x, y, errR, errG, errB, cfg)
 		}
 	}
+	applyOutline()
 	return out
 }
 
 func diffuseFloydSteinberg(buf [][3]float64, w, h, x, y int, errR, errG, errB float64, cfg PaletteMapConfig) {
+	scale := cfg.DitherAmount
+	if cfg.Saliency {
+		scale *= ditherModulationAt(cfg.Structure, x, y)
+	}
+	if scale <= 0 {
+		return
+	}
+	errR *= scale
+	errG *= scale
+	errB *= scale
 	edgeAt := func(nx, ny int) float64 {
 		if cfg.Structure == nil || cfg.Structure.EdgeMap == nil {
 			return 0
@@ -158,6 +224,12 @@ func diffuseFloydSteinberg(buf [][3]float64, w, h, x, y int, errR, errG, errB fl
 
 	srcEdge := edgeAt(x, y)
 	attenuate := func(nx, ny int, factor float64) float64 {
+		if cfg.Structure != nil && cfg.Structure.BoundaryBand != nil {
+			ni := ny*w + nx
+			if ni >= 0 && ni < len(cfg.Structure.BoundaryBand) && cfg.Structure.BoundaryBand[ni] {
+				return 0
+			}
+		}
 		if !cfg.DitherEdge {
 			return factor
 		}

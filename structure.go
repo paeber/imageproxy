@@ -12,11 +12,15 @@ import (
 
 // StructureContext holds precomputed structure maps for palette mapping.
 type StructureContext struct {
-	EdgeMap   []float64 // normalized Sobel magnitude per pixel, length w*h
-	EdgeMask  []bool    // binary edge mask after threshold and morphology
-	RegionIDs []int     // per-pixel region ID, -1 when regions disabled
-	Width     int
-	Height    int
+	EdgeMap      []float64 // normalized Sobel magnitude per pixel, length w*h
+	EdgeMask     []bool    // binary edge mask after threshold and morphology
+	ActivityMap  []float64 // local luminance variance 0-1
+	SaliencyMap  []float64 // simple saliency proxy 0-1
+	BoundaryBand []bool    // dilated edge band for protected dither/fillflat
+	OutlineMask  []bool    // morphological gradient for outline mode
+	RegionIDs    []int     // per-pixel region ID, -1 when regions disabled
+	Width        int
+	Height       int
 }
 
 // structureConfigFromOptions builds structure processing parameters from Options.
@@ -37,6 +41,17 @@ func structureConfigFromOptions(opt Options) (edgeThreshold int, dilate, erode, 
 			regions = defaultCoverRegions
 		}
 		overlay = true
+	}
+	if opt.CoverPMPreset {
+		if edgeThreshold == 0 {
+			edgeThreshold = defaultCoverEdge
+		}
+		if dilate == 0 {
+			dilate = defaultCoverDilate
+		}
+		if regions == 0 {
+			regions = defaultCoverRegions
+		}
 	}
 	return edgeThreshold, dilate, erode, regions, overlay
 }
@@ -66,10 +81,15 @@ func buildStructureContext(img image.Image, opt Options) *StructureContext {
 		Height: h,
 	}
 
-	if edgeThreshold > 0 || opt.DitherEdge || opt.StructureOverlay || opt.CoverPreset {
+	if edgeThreshold > 0 || opt.DitherEdge || opt.StructureOverlay || opt.CoverPreset || opt.CoverPMPreset || opt.Outline || opt.FillFlat || opt.ProtectEdge > 0 {
 		ctx.EdgeMap = sobelEdgeMap(img, bounds)
+		threshold := 0.0
 		if edgeThreshold > 0 {
-			threshold := float64(edgeThreshold) / 100.0
+			threshold = float64(edgeThreshold) / 100.0
+		} else if opt.Outline || opt.FillFlat || opt.ProtectEdge > 0 {
+			threshold = float64(defaultCoverEdge) / 100.0
+		}
+		if threshold > 0 {
 			mask := thresholdEdgeMask(ctx.EdgeMap, threshold)
 			if erode > 0 {
 				mask = morphErode(mask, w, h, erode)
@@ -81,7 +101,32 @@ func buildStructureContext(img image.Image, opt Options) *StructureContext {
 		}
 	}
 
-	if regions > 0 {
+	if opt.DitherSmooth > 0 || opt.FillFlat {
+		ctx.ActivityMap = localVarianceMap(img, bounds)
+	}
+
+	if opt.Saliency {
+		ctx.SaliencyMap = saliencyMap(bounds, ctx.EdgeMap)
+	}
+
+	protectRadius := opt.ProtectEdge
+	if protectRadius == 0 && opt.FillFlat {
+		protectRadius = 2
+	}
+	if protectRadius > 0 && ctx.EdgeMask != nil {
+		ctx.BoundaryBand = morphDilate(ctx.EdgeMask, w, h, protectRadius)
+	} else if protectRadius > 0 && ctx.EdgeMap != nil {
+		mask := thresholdEdgeMask(ctx.EdgeMap, 0.15)
+		ctx.BoundaryBand = morphDilate(mask, w, h, protectRadius)
+	}
+
+	if opt.Outline && ctx.EdgeMask != nil {
+		ctx.OutlineMask = morphGradient(ctx.EdgeMask, w, h)
+	}
+
+	if opt.SegFZH > 0 {
+		ctx.RegionIDs = felzenszwalbSegment(img, bounds, opt.SegFZH)
+	} else if regions > 0 {
 		buckets := medianCutBuckets(img, bounds, regions)
 		ctx.RegionIDs = labelConnectedComponents(buckets, w, h)
 	}
@@ -180,6 +225,119 @@ func morphErode(mask []bool, w, h, radius int) []bool {
 		}
 	}
 	return out
+}
+
+func morphGradient(mask []bool, w, h int) []bool {
+	if mask == nil {
+		return nil
+	}
+	dilated := morphDilate(mask, w, h, 1)
+	eroded := morphErode(mask, w, h, 1)
+	out := make([]bool, len(mask))
+	for i := range out {
+		out[i] = dilated[i] && !eroded[i]
+	}
+	return out
+}
+
+func localVarianceMap(img image.Image, bounds image.Rectangle) []float64 {
+	w, h := bounds.Dx(), bounds.Dy()
+	out := make([]float64, w*h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			var vals []float64
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					nx, ny := x+dx, y+dy
+					if nx < 0 || nx >= w || ny < 0 || ny >= h {
+						continue
+					}
+					r, g, b := colorToRGBA8(img.At(bounds.Min.X+nx, bounds.Min.Y+ny))
+					vals = append(vals, pixelLuminance(r, g, b))
+				}
+			}
+			if len(vals) == 0 {
+				continue
+			}
+			var mean float64
+			for _, v := range vals {
+				mean += v
+			}
+			mean /= float64(len(vals))
+			var varSum float64
+			for _, v := range vals {
+				d := v - mean
+				varSum += d * d
+			}
+			out[y*w+x] = varSum / float64(len(vals))
+		}
+	}
+	var maxVar float64
+	for _, v := range out {
+		if v > maxVar {
+			maxVar = v
+		}
+	}
+	if maxVar > 0 {
+		for i := range out {
+			out[i] /= maxVar
+		}
+	}
+	return out
+}
+
+func saliencyMap(bounds image.Rectangle, edgeMap []float64) []float64 {
+	w, h := bounds.Dx(), bounds.Dy()
+	out := make([]float64, w*h)
+	cx, cy := float64(w-1)/2, float64(h-1)/2
+	maxDist := math.Hypot(cx, cy)
+	if maxDist == 0 {
+		maxDist = 1
+	}
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := y*w + x
+			centerBias := 1.0 - math.Hypot(float64(x)-cx, float64(y)-cy)/maxDist
+			edge := 0.0
+			if edgeMap != nil {
+				edge = edgeMap[i]
+			}
+			out[i] = 0.5*centerBias + 0.5*edge
+		}
+	}
+	return out
+}
+
+func isHighActivity(ctx *StructureContext, x, y int, threshold float64) bool {
+	if ctx == nil || ctx.ActivityMap == nil {
+		return false
+	}
+	i := y*ctx.Width + x
+	return ctx.ActivityMap[i] > threshold
+}
+
+func isInBoundaryBand(ctx *StructureContext, x, y int) bool {
+	if ctx == nil || ctx.BoundaryBand == nil {
+		return false
+	}
+	i := y*ctx.Width + x
+	return ctx.BoundaryBand[i]
+}
+
+func shouldDitherAt(ctx *StructureContext, x, y int, ditherSmooth int) bool {
+	if ditherSmooth <= 0 {
+		return true
+	}
+	threshold := float64(ditherSmooth) / 100.0
+	return !isHighActivity(ctx, x, y, threshold)
+}
+
+func ditherModulationAt(ctx *StructureContext, x, y int) float64 {
+	if ctx == nil || ctx.SaliencyMap == nil {
+		return 1.0
+	}
+	i := y*ctx.Width + x
+	return 0.35 + 0.65*ctx.SaliencyMap[i]
 }
 
 type rgbPixel struct {
@@ -405,6 +563,9 @@ func isRegionInterior(ctx *StructureContext, x, y int, edgeInteriorThreshold flo
 	i := y*ctx.Width + x
 	rid := ctx.RegionIDs[i]
 	if rid < 0 {
+		return false
+	}
+	if isInBoundaryBand(ctx, x, y) {
 		return false
 	}
 	if ctx.EdgeMap != nil && ctx.EdgeMap[i] > edgeInteriorThreshold {
